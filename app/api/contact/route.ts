@@ -39,8 +39,7 @@ export async function POST(request: Request) {
   }
 
   const fields = [
-    `*이름*\n${esc(name)}`,
-    `*회사*\n${esc(company)}`,
+    `*이름(회사)*\n${esc(name)} (${esc(company)})`,
     `*연락처*\n${esc(contact)}`,
   ];
 
