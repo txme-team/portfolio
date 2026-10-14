@@ -1,0 +1,267 @@
+<!doctype html>
+<!--
+  소구점 아이콘(public/icons/y2k-*.png → webp)을 그리는 도구. 사이트에는 포함되지 않는다.
+  히어로의 큐브(components/HeroBlocks.tsx)와 같은 주변 풍경 · 재질 · 조명 · 시점을 쓴다.
+  거기를 바꾸면 여기도 같이 바꾸고 scripts/render-icons.sh 를 다시 돌릴 것.
+  ?icon=gear | chart | puzzle
+-->
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; background: transparent; }
+  canvas { display: block; width: 512px; height: 512px; }
+</style>
+<canvas id="c" width="1024" height="1024"></canvas>
+<script type="importmap">
+  { "imports": { "three": "../node_modules/three/build/three.module.js" } }
+</script>
+<script type="module">
+  import * as THREE from "three";
+
+  const icon = new URLSearchParams(location.search).get("icon") ?? "gear";
+  const SIZE = 512;
+
+  function paintEnvironment() {
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 512;
+    const g = c.getContext("2d");
+    const sky = g.createLinearGradient(0, 0, 0, 512);
+    sky.addColorStop(0, "#ffffff");
+    sky.addColorStop(0.28, "#cfd6ff");
+    sky.addColorStop(0.44, "#8f9bff");
+    sky.addColorStop(0.5, "#ff9be0");
+    sky.addColorStop(0.56, "#3a2bd6");
+    sky.addColorStop(0.75, "#15124a");
+    sky.addColorStop(1, "#5959ff");
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 1024, 512);
+    g.fillStyle = "#ffffff";
+    for (const [x, y, w, h] of [
+      [90, 60, 150, 150],
+      [430, 30, 70, 210],
+      [640, 90, 190, 90],
+      [900, 50, 60, 180],
+    ]) g.fillRect(x, y, w, h);
+    g.fillStyle = "#d7ff3e";
+    g.fillRect(250, 270, 240, 22);
+    g.fillRect(760, 300, 160, 16);
+    return c;
+  }
+
+  const material = {
+    chrome: () => new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.04 }),
+    pearl: () =>
+      new THREE.MeshPhysicalMaterial({
+        color: 0xd4d4ff,
+        metalness: 0.85,
+        roughness: 0.14,
+        iridescence: 1,
+        iridescenceIOR: 1.9,
+        iridescenceThicknessRange: [180, 620],
+      }),
+    lime: () =>
+      new THREE.MeshPhysicalMaterial({
+        color: 0xd7ff3e,
+        metalness: 0.15,
+        roughness: 0.2,
+        clearcoat: 1,
+        clearcoatRoughness: 0.04,
+      }),
+    blue: () =>
+      new THREE.MeshPhysicalMaterial({
+        color: 0x5050ff,
+        metalness: 0.25,
+        roughness: 0.2,
+        clearcoat: 1,
+        clearcoatRoughness: 0.04,
+      }),
+  };
+
+  // 납작한 모양에 두께를 주고 가장자리를 둥글게 부풀려 눕힌다 (바닥이 y=0).
+  // 윤곽은 puff 만큼 바깥으로 불어나므로 모양은 그만큼 작게 그린다.
+  function slab(shape, depth, puff, round = puff * 1.5) {
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: Math.max(0.001, depth - round * 2),
+      bevelEnabled: true,
+      bevelThickness: round,
+      bevelSize: puff,
+      bevelSegments: 12,
+      curveSegments: 48,
+    });
+    g.translate(0, 0, round);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }
+
+  // 윤곽의 모서리를 둥글린다: 같은 간격으로 점을 찍고 이웃 점들과 평균을 낸다
+  function soften(shape, reach = 5, passes = 2) {
+    let pts = shape.getSpacedPoints(420).slice(0, -1);
+    for (let p = 0; p < passes; p++) {
+      pts = pts.map((_, i) => {
+        const v = new THREE.Vector2();
+        for (let k = -reach; k <= reach; k++) v.add(pts[(i + k + pts.length) % pts.length]);
+        return v.divideScalar(reach * 2 + 1);
+      });
+    }
+    const out = new THREE.Shape(pts);
+    out.holes = shape.holes;
+    return out;
+  }
+
+  const builders = {
+    // 톱니바퀴: 파란 톱니 + 가운데 크롬 구슬
+    gear(group) {
+      const teeth = 8;
+      const R = 0.9;
+      const r0 = 0.64;
+      const s = new THREE.Shape();
+      for (let i = 0; i < teeth; i++) {
+        const a = (i / teeth) * Math.PI * 2;
+        const pts = [
+          [r0, a - 0.2],
+          [R, a - 0.1],
+          [R, a + 0.1],
+          [r0, a + 0.2],
+        ];
+        pts.forEach(([r, t], j) => {
+          const x = Math.cos(t) * r;
+          const y = Math.sin(t) * r;
+          if (i === 0 && j === 0) s.moveTo(x, y);
+          else s.lineTo(x, y);
+        });
+        s.absarc(0, 0, r0, a + 0.2, a + (Math.PI * 2) / teeth - 0.2, false);
+      }
+      const hole = new THREE.Path();
+      hole.absarc(0, 0, 0.44, 0, Math.PI * 2, true);
+      s.holes.push(hole);
+      group.add(new THREE.Mesh(slab(soften(s, 4), 0.56, 0.11), material.blue()));
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 64, 48), material.chrome());
+      ball.position.y = 0.36;
+      group.add(ball);
+    },
+
+    // 원그래프: 파란 몸통 + 빠져나온 라임 조각
+    chart(group) {
+      const R = 0.88;
+      const cut = Math.PI / 2.4; // 조각의 각도
+      const start = -Math.PI / 2 - 0.55; // 조각이 화면 앞쪽을 향하도록
+      const sector = (a0, a1) => {
+        const s = new THREE.Shape();
+        s.moveTo(0, 0);
+        s.absarc(0, 0, R, a0, a1, false);
+        s.lineTo(0, 0);
+        return s;
+      };
+      group.add(
+        new THREE.Mesh(slab(soften(sector(start + cut, start + Math.PI * 2), 4), 0.66, 0.12), material.blue())
+      );
+      const slice = new THREE.Mesh(slab(soften(sector(start, start + cut), 4), 0.66, 0.12), material.lime());
+      const mid = start + cut / 2;
+      // 모양의 (x, y)는 눕히면 (x, 0, -y)가 된다
+      slice.position.set(Math.cos(mid) * 0.5, 0.3, -Math.sin(mid) * 0.5);
+      group.add(slice);
+    },
+
+    // 퍼즐: 펄 조각 하나
+    puzzle(group) {
+      const puff = 0.08;
+      const h = 0.62;
+      // 부풀면 돌기는 커지고 홈은 줄어든다(돌기 0.22, 홈 0.17쯤).
+      // 홈이 더 크면 이웃한 두 홈이 모서리에서 만나 조각이 끊어진다
+      const knob = { r: 0.14, d: 0.11 };
+      const socket = { r: 0.25, d: 0.16 };
+      const neck = ({ r, d }) => Math.sqrt(r * r - d * d);
+      const nk = neck(knob);
+      const ns = neck(socket);
+      const s = new THREE.Shape();
+      s.moveTo(-h, -h);
+      // 아래: 안으로 파인 홈
+      s.lineTo(-ns, -h);
+      s.absarc(0, -h + socket.d, socket.r, Math.atan2(-socket.d, -ns), Math.atan2(-socket.d, ns), true);
+      s.lineTo(h, -h);
+      // 오른쪽: 밖으로 나온 돌기
+      s.lineTo(h, -nk);
+      s.absarc(h + knob.d, 0, knob.r, Math.atan2(-nk, -knob.d), Math.atan2(nk, -knob.d), false);
+      s.lineTo(h, h);
+      // 위: 돌기
+      s.lineTo(nk, h);
+      s.absarc(0, h + knob.d, knob.r, Math.atan2(-knob.d, nk), Math.atan2(-knob.d, -nk) + Math.PI * 2, false);
+      s.lineTo(-h, h);
+      // 왼쪽: 홈
+      s.lineTo(-h, ns);
+      s.absarc(-h + socket.d, 0, socket.r, Math.atan2(ns, -socket.d), Math.atan2(-ns, -socket.d), true);
+      s.lineTo(-h, -h);
+
+      group.add(new THREE.Mesh(slab(soften(s), 0.56, puff), material.pearl()));
+    },
+  };
+
+  const canvas = document.getElementById("c");
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: true,
+    preserveDrawingBuffer: true,
+  });
+  renderer.setPixelRatio(2);
+  renderer.setSize(SIZE, SIZE, false);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.toneMapping = THREE.NoToneMapping;
+
+  const scene = new THREE.Scene();
+  const envSource = new THREE.CanvasTexture(paintEnvironment());
+  envSource.mapping = THREE.EquirectangularReflectionMapping;
+  envSource.colorSpace = THREE.SRGBColorSpace;
+  scene.environment = new THREE.PMREMGenerator(renderer).fromEquirectangular(envSource).texture;
+
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(-7, 14, 9);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -4;
+  sun.shadow.camera.right = 4;
+  sun.shadow.camera.top = 4;
+  sun.shadow.camera.bottom = -4;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 60;
+  sun.shadow.bias = -0.0006;
+  sun.shadow.radius = 6;
+  scene.add(sun);
+
+  // 히어로보다 조금 더 위에서 본다(작게 써도 모양이 읽히도록)
+  const stage = new THREE.Group();
+  stage.rotation.set(0.92, -0.62, 0);
+  scene.add(stage);
+
+  const object = new THREE.Group();
+  object.position.y = 0.16; // 바닥에서 살짝 떠 있다
+  builders[icon](object);
+  object.traverse((m) => {
+    if (m.isMesh) m.castShadow = true;
+  });
+  stage.add(object);
+
+  // 화면에 맞추기: 물체가 그림의 64%를 차지하게(나머지는 그림자 자리)
+  stage.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(object, true); // 꼭짓점 기준(세 아이콘의 크기가 같아지도록)
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 40),
+    new THREE.ShadowMaterial({ color: 0x5959ff, opacity: 0.17 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  stage.add(floor);
+
+  const camera = new THREE.OrthographicCamera(-SIZE / 2, SIZE / 2, SIZE / 2, -SIZE / 2, 1, 400);
+  camera.zoom = (SIZE * 0.64) / Math.max(size.x, size.y);
+  // 그림자가 오른쪽 아래로 떨어지므로 물체를 조금 왼쪽 위에 둔다
+  camera.position.set(center.x + 18 / camera.zoom, center.y - 30 / camera.zoom, 200);
+  camera.updateProjectionMatrix();
+
+  renderer.render(scene, camera);
+  document.title = "done";
+</script>

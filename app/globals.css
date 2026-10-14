@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #ffffff;
+  --paper-2: #f2f2f2;
+  /* 섹션 배경을 흰색과 번갈아 쓰는 색 */
+  --paper-alt: #f5f5f5;
+  --ink: #0c0c0c;
+  --ink-soft: #1a1a1a;
+  /* #f5f5f5 배경 위에서도 읽히도록 흰 배경 기준보다 한 단계 진하게 */
+  --muted: #6b6b6b;
+  --line: #d8d8d8;
+  --lime: #d7ff3e;
+  --lime-deep: #b6e300;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-alt: var(--paper-alt);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-lime: var(--lime);
+  --color-lime-deep: var(--lime-deep);
+  --font-sans: var(--font-inter), "Pretendard Variable", Pretendard, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  /* 라틴·숫자는 Inter, 한글은 Pretendard */
+  font-family: var(--font-inter), "Pretendard Variable", Pretendard,
+    -apple-system, system-ui, sans-serif;
+  overflow-x: hidden;
+  /* 한글이 단어 중간에서 끊기지 않도록 어절 단위로 줄바꿈 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+::selection {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.display {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+
+/* 한글 헤드라인용: 한글은 글리프가 em 박스를 꽉 채워 라틴용 0.9 행간에서 줄이 겹친다 */
+.display-ko {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.18;
+}
+
+.tighter {
+  letter-spacing: -0.045em;
+}
+
+.label {
+  font-family: var(--font-mono), "Pretendard Variable", Pretendard, ui-monospace,
+    monospace;
+  font-size: 0.8125rem; /* 13px: 사이트의 최소 글자 크기 */
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hover-line {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.hover-line:hover {
+  background-size: 100% 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
